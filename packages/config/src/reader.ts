@@ -65,19 +65,23 @@ export class ConfigReader implements Config {
   constructor(
     private readonly data: JsonObject | undefined,
     private readonly fallback?: ConfigReader,
+    private readonly prefix: string = '',
   ) {}
 
   getConfig(key: string): ConfigReader {
     const value = this.readValue(key);
     const fallbackConfig = this.fallback?.getConfig(key);
+    const prefix = this.fullKey(key);
 
     if (isObject(value)) {
-      return new ConfigReader(value, fallbackConfig);
+      return new ConfigReader(value, fallbackConfig, prefix);
     }
     if (value !== undefined) {
-      throw new TypeError(errors.type(key, typeOf(value), 'object'));
+      throw new TypeError(
+        errors.type(this.fullKey(key), typeOf(value), 'object'),
+      );
     }
-    return fallbackConfig ?? new ConfigReader(undefined, undefined);
+    return fallbackConfig ?? new ConfigReader(undefined, undefined, prefix);
   }
 
   getConfigArray(key: string): ConfigReader[] {
@@ -94,13 +98,16 @@ export class ConfigReader implements Config {
       return true;
     });
 
-    return (configs ?? []).map(obj => new ConfigReader(obj));
+    return (configs ?? []).map(
+      (obj, index) =>
+        new ConfigReader(obj, undefined, this.fullKey(`${key}[${index}]`)),
+    );
   }
 
   mustNumber(key: string): number {
     const value = this.getNumber(key);
     if (value === undefined) {
-      throw new Error(errors.missing(key));
+      throw new Error(errors.missing(this.fullKey(key)));
     }
     return value;
   }
@@ -115,7 +122,7 @@ export class ConfigReader implements Config {
   mustBoolean(key: string): boolean {
     const value = this.getBoolean(key);
     if (value === undefined) {
-      throw new Error(errors.missing(key));
+      throw new Error(errors.missing(this.fullKey(key)));
     }
     return value;
   }
@@ -130,7 +137,7 @@ export class ConfigReader implements Config {
   mustString(key: string): string {
     const value = this.getString(key);
     if (value === undefined) {
-      throw new Error(errors.missing(key));
+      throw new Error(errors.missing(this.fullKey(key)));
     }
     return value;
   }
@@ -146,7 +153,7 @@ export class ConfigReader implements Config {
   mustStringArray(key: string): string[] {
     const value = this.getStringArray(key);
     if (value === undefined) {
-      throw new Error(errors.missing(key));
+      throw new Error(errors.missing(this.fullKey(key)));
     }
     return value;
   }
@@ -163,6 +170,10 @@ export class ConfigReader implements Config {
       }
       return true;
     });
+  }
+
+  private fullKey(key: string): string {
+    return `${this.prefix}${this.prefix ? '.' : ''}${key}`;
   }
 
   private readConfigValue<T extends JsonValue>(
@@ -184,7 +195,9 @@ export class ConfigReader implements Config {
           value: theValue = value,
           expected,
         } = result;
-        throw new TypeError(errors.type(keyName, typeOf(theValue), expected));
+        throw new TypeError(
+          errors.type(this.fullKey(keyName), typeOf(theValue), expected),
+        );
       }
     }
 
